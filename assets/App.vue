@@ -47,7 +47,7 @@
         </button>
         <Menu
           v-model="showMenu"
-          :items="[{ text: '名称A-Z' }, { text: '名称Z-A' }, { text: '大小↑' } ,{ text: '大小↓' }, { text: '粘贴' }]"
+          :items="[{ text: '名称A-Z' }, { text: '大小↑' } ,{ text: '大小↓' }, { text: '粘贴' }]"
           @click="onMenuClick"
         />
       </div>
@@ -113,7 +113,7 @@
       </li>
       <li v-for="file in filteredFiles" :key="file.key">
         <div
-          @click="onFileClick(file)"
+          @click="preview(`/raw/${file.key}`)"
           @contextmenu.prevent="
             showContextMenu = true;
             focusedItem = file;
@@ -198,11 +198,6 @@
             <span>重命名</span>
           </button>
         </li>
-        <li v-if="isTextFile(focusedItem)">
-          <button @click="openEdit(focusedItem)">
-            <span>编辑</span>
-          </button>
-        </li>
         <li>
           <a :href="`/raw/${focusedItem.key}`" target="_blank" download>
             <span>下载</span>
@@ -230,17 +225,6 @@
         </li>
       </ul>
     </Dialog>
-    <Preview
-      v-model="showPreview"
-      :file="previewFile"
-      @edit="handleEdit"
-    ></Preview>
-    <TextEditor
-      v-model="showEditor"
-      :file="editorFile"
-      :content="editorContent"
-      @refresh="onEditorRefresh"
-    ></TextEditor>
   </div>
 </template>
 
@@ -256,8 +240,6 @@ import Menu from "./Menu.vue";
 import MimeIcon from "./MimeIcon.vue";
 import UploadPopup from "./UploadPopup.vue";
 import FolderPasswordDialog from "./FolderPasswordDialog.vue";
-import Preview from "./Preview.vue";
-import TextEditor from "./TextEditor.vue";
 
 export default {
   data: () => ({
@@ -278,11 +260,6 @@ export default {
     passwordDialogFolder: "",
     uploadProgress: null,
     uploadQueue: [],
-    showPreview: false,
-    previewFile: null,
-    showEditor: false,
-    editorFile: null,
-    editorContent: '',
   }),
 
   computed: {
@@ -345,9 +322,15 @@ export default {
         .then((res) => res.json())
         .then((files) => {
           this.files = files.value;
+          if (this.order) {
+            this.files.sort((a, b) => {
+              if (this.order === "size") {
+                return b.size - a.size;
+              }
+            });
+          }
           this.folders = files.folders;
           this.foldersWithPasswordInfo = files.foldersWithPasswordInfo || [];
-          this.applySort();
           this.loading = false;
         });
     },
@@ -425,10 +408,7 @@ export default {
     onMenuClick(text) {
       switch (text) {
         case "名称A-Z":
-          this.order = "名称A-Z";
-          break;
-        case "名称Z-A":
-          this.order = "名称Z-A";
+          this.order = null;
           break;
         case "大小↑":
           this.order = "大小↑";
@@ -439,23 +419,8 @@ export default {
         case "粘贴":
           return this.pasteFile();
       }
-      this.applySort();
-    },
-
-    applySort() {
-      const folderOrder = this.order;
-      if (folderOrder === "名称A-Z") {
-        this.folders.sort((a, b) => a.localeCompare(b));
-      } else if (folderOrder === "名称Z-A") {
-        this.folders.sort((a, b) => b.localeCompare(a));
-      }
-
       this.files.sort((a, b) => {
-        if (this.order === "名称A-Z") {
-          return a.key.localeCompare(b.key);
-        } else if (this.order === "名称Z-A") {
-          return b.key.localeCompare(a.key);
-        } else if (this.order === "大小↑") {
+        if (this.order === "大小↑") {
           return a.size - b.size;
         } else if (this.order === "大小↓") {
           return b.size - a.size;
@@ -474,78 +439,6 @@ export default {
 
     preview(filePath){
       window.open(filePath);
-    },
-
-    openPreview(file) {
-      this.previewFile = file;
-      this.showPreview = true;
-    },
-
-    isTextFile(file) {
-      const textExtensions = [
-        'txt', 'md', 'json', 'xml', 'html', 'htm', 'css', 'js', 'mjs', 'cjs',
-        'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'cc', 'cxx', 'h', 'hpp',
-        'rs', 'go', 'rb', 'php', 'sh', 'bash', 'zsh', 'bat', 'cmd', 'ps1',
-        'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'log', 'csv', 'sql',
-        'env', 'gitignore', 'editorconfig', 'vue', 'scss', 'less', 'sass',
-        'svg', 'rss', 'atom', 'tex', 'latex', 'makefile', 'dockerfile',
-        'properties', 'lock', 'tsv', 'rst', 'asciidoc', 'adoc', 'diff', 'patch',
-        'nfo', 'text', 'readme', 'license', 'changelog', 'crontab', 'cnf',
-        'htaccess', 'pl', 'pm', 'r', 'lua', 'dart', 'kt', 'kts', 'swift',
-        'scala', 'groovy', 'jl', 'ex', 'exs', 'erl', 'hrl', 'hs', 'lhs',
-        'clj', 'cljs', 'edn', 'coffee', 'litcoffee', 'elm', 'fs', 'fsx',
-        'fsharp', 'ml', 'mli', 'nim', 'v', 'zig', 'cbl', 'cob', 'cpy',
-        'proto', 'thrift', 'graphql', 'gql', 'prisma', 'tf', 'tfvars',
-        'dockerignore', 'npmignore', 'eslintrc', 'prettierrc', 'babelrc',
-        'stylelintrc', 'browserslistrc',
-      ];
-      const contentType = file.httpMetadata?.contentType || '';
-      if (contentType.startsWith('text/') ||
-          contentType === 'application/json' ||
-          contentType === 'application/xml' ||
-          contentType === 'application/javascript' ||
-          contentType === 'application/x-yaml' ||
-          contentType === 'application/x-sh' ||
-          contentType === 'application/x-httpd-php' ||
-          contentType === 'application/x-python-code' ||
-          contentType === 'application/x-perl' ||
-          contentType === 'application/x-ruby') {
-        return true;
-      }
-      const key = file.key || '';
-      const ext = key.split('.').pop().toLowerCase();
-      if (textExtensions.includes(ext)) return true;
-      if (!ext && contentType === '') return true;
-      return false;
-    },
-
-    async openEdit(file) {
-      this.showContextMenu = false;
-      try {
-        const res = await fetch(`/raw/${file.key}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const content = await res.text();
-        this.editorFile = file;
-        this.editorContent = content;
-        this.showEditor = true;
-      } catch (e) {
-        alert('无法读取文件内容: ' + e.message);
-      }
-    },
-
-    handleEdit({ file, content }) {
-      // 从预览组件切换到编辑器
-      this.editorFile = file;
-      this.editorContent = content;
-      this.showEditor = true;
-    },
-
-    onEditorRefresh() {
-      this.fetchFiles();
-    },
-
-    onFileClick(file) {
-      this.openPreview(file);
     },
 
     async pasteFile() {
@@ -825,8 +718,6 @@ export default {
     MimeIcon,
     UploadPopup,
     FolderPasswordDialog,
-    Preview,
-    TextEditor,
   },
 };
 </script>
