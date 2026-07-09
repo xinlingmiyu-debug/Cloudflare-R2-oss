@@ -110,7 +110,6 @@ export async function onRequestPut(context) {
 
   let content = request.body;
   const customMetadata: Record<string, string> = {};
-  let httpMetadata: Record<string, any> = {};
 
   if (request.headers.has("x-amz-copy-source")) {
     const sourceName = decodeURIComponent(
@@ -118,7 +117,6 @@ export async function onRequestPut(context) {
     );
     const source = await bucket.get(sourceName);
     content = source.body;
-    httpMetadata = source.httpMetadata || {};
     if (source.customMetadata.thumbnail)
       customMetadata.thumbnail = source.customMetadata.thumbnail;
   }
@@ -126,10 +124,7 @@ export async function onRequestPut(context) {
   if (request.headers.has("fd-thumbnail"))
     customMetadata.thumbnail = request.headers.get("fd-thumbnail");
 
-  const contentType = request.headers.get("content-type");
-  if (contentType) httpMetadata.contentType = contentType;
-
-  const obj = await bucket.put(path, content, { customMetadata, httpMetadata });
+  const obj = await bucket.put(path, content, { customMetadata });
   const { key, size, uploaded } = obj;
   return new Response(JSON.stringify({ key, size, uploaded }), {
     headers: { "Content-Type": "application/json" },
