@@ -10,6 +10,13 @@
       @upload="onUploadClicked"
       @createFolder="createFolder"
     ></UploadPopup>
+    <FolderPasswordDialog
+      v-model="showPasswordDialog"
+      :mode="passwordDialogMode"
+      :folderPath="passwordDialogFolder"
+      @verified="onPasswordVerified"
+      @cancelled="onPasswordCancelled"
+    ></FolderPasswordDialog>
     <button class="upload-button circle" @click="showUploadPopup = true">
       <img
         style="filter: invert(100%)"
@@ -68,7 +75,7 @@
         <div
           tabindex="0"
           class="file-item"
-          @click="cwd = folder"
+          @click="onFolderClick(folder)"
           @contextmenu.prevent="
             showContextMenu = true;
             focusedItem = folder;
@@ -80,6 +87,14 @@
               width="36"
               height="36"
               alt="Folder"
+            />
+            <img
+              v-if="isFolderLocked(folder)"
+              class="folder-lock-icon"
+              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512'%3E%3Cpath fill='%23e67e22' d='M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z'/%3E%3C/svg%3E"
+              width="14"
+              height="14"
+              alt="Locked"
             />
           </div>
           <span
@@ -159,6 +174,16 @@
           </button>
         </li>
         <li>
+          <button @click="setFolderPassword(focusedItem)">
+            <span>{{ isFolderLocked(focusedItem) ? '修改密码' : '设置密码' }}</span>
+          </button>
+        </li>
+        <li v-if="isFolderLocked(focusedItem)">
+          <button @click="removeFolderPassword(focusedItem)">
+            <span>移除密码</span>
+          </button>
+        </li>
+        <li>
           <button
             style="color: red"
             @click="removeFile(focusedItem + '_$folder$')"
@@ -214,12 +239,14 @@ import Dialog from "./Dialog.vue";
 import Menu from "./Menu.vue";
 import MimeIcon from "./MimeIcon.vue";
 import UploadPopup from "./UploadPopup.vue";
+import FolderPasswordDialog from "./FolderPasswordDialog.vue";
 
 export default {
   data: () => ({
     cwd: new URL(window.location).searchParams.get("p") || "",
     files: [],
     folders: [],
+    foldersWithPasswordInfo: [],
     clipboard: null,
     focusedItem: null,
     loading: false,
@@ -228,6 +255,9 @@ export default {
     showContextMenu: false,
     showMenu: false,
     showUploadPopup: false,
+    showPasswordDialog: false,
+    passwordDialogMode: "verify",
+    passwordDialogFolder: "",
     uploadProgress: null,
     uploadQueue: [],
   }),
@@ -286,6 +316,7 @@ export default {
     fetchFiles() {
       this.files = [];
       this.folders = [];
+      this.foldersWithPasswordInfo = [];
       this.loading = true;
       fetch(`/api/children/${this.cwd}`)
         .then((res) => res.json())
@@ -299,6 +330,7 @@ export default {
             });
           }
           this.folders = files.folders;
+          this.foldersWithPasswordInfo = files.foldersWithPasswordInfo || [];
           this.loading = false;
         });
     },
@@ -311,6 +343,56 @@ export default {
         i++;
       }
       return `${size.toFixed(1)} ${units[i]}`;
+    },
+
+    isFolderLocked(folder) {
+      const info = this.foldersWithPasswordInfo.find(f => f.name === folder);
+      return info ? info.hasPassword : false;
+    },
+
+    onFolderClick(folder) {
+      if (this.isFolderLocked(folder)) {
+        // 检查是否已经验证过
+        const savedPassword = sessionStorage.getItem('folder_password_' + folder);
+        if (savedPassword) {
+          // 已通过验证，直接进入
+          this.cwd = folder;
+        } else {
+          // 需要验证密码
+          this.passwordDialogMode = 'verify';
+          this.passwordDialogFolder = folder;
+          this.showPasswordDialog = true;
+        }
+      } else {
+        this.cwd = folder;
+      }
+    },
+
+    onPasswordVerified(folderPath) {
+      this.cwd = folderPath;
+    },
+
+    onPasswordCancelled() {
+      // 取消密码验证，不做任何操作
+    },
+
+    setFolderPassword(folder) {
+      this.passwordDialogMode = this.isFolderLocked(folder) ? 'change' : 'set';
+      this.passwordDialogFolder = folder;
+      this.showPasswordDialog = true;
+      this.showContextMenu = false;
+    },
+
+    async removeFolderPassword(folder) {
+      if (!window.confirm('确定要移除该文件夹的密码锁吗？')) return;
+      try {
+        await axios.delete(`/api/folder_password/${folder}`);
+        sessionStorage.removeItem('folder_password_' + folder);
+        this.showContextMenu = false;
+        this.fetchFiles();
+      } catch (e) {
+        alert('移除密码失败');
+      }
     },
 
     onDrop(ev) {
@@ -635,6 +717,7 @@ export default {
     Menu,
     MimeIcon,
     UploadPopup,
+    FolderPasswordDialog,
   },
 };
 </script>
@@ -670,5 +753,15 @@ export default {
   position: absolute;
   top: 100%;
   right: 0;
+}
+
+.folder-lock-icon {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: white;
+  border-radius: 50%;
+  padding: 1px;
+  box-shadow: 0 0 2px rgba(0,0,0,0.2);
 }
 </style>

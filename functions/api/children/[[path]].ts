@@ -22,7 +22,24 @@ export async function onRequestGet(context) {
     if (!path)
       folders = folders.filter((folder) => folder !== "_$flaredrive$/");
 
-    return new Response(JSON.stringify({ value: objKeys, folders }), {
+    // 为每个文件夹添加密码状态标记
+    const foldersWithPasswordInfo = await Promise.all(
+      folders.map(async (folder) => {
+        const passwordKey = folder + "_$folder_password$";
+        try {
+          const obj = await bucket.get(passwordKey);
+          return { name: folder, hasPassword: !!obj };
+        } catch (e) {
+          return { name: folder, hasPassword: false };
+        }
+      })
+    );
+
+    return new Response(JSON.stringify({ 
+      value: objKeys, 
+      folders: foldersWithPasswordInfo.map(f => f.name),
+      foldersWithPasswordInfo
+    }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
