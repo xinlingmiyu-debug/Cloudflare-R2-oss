@@ -17,6 +17,11 @@
       @verified="onPasswordVerified"
       @cancelled="onPasswordCancelled"
     ></FolderPasswordDialog>
+    <TextEditor
+      v-model="showTextEditor"
+      :file="editingFile"
+      @saved="onEditorSaved"
+    ></TextEditor>
     <button class="upload-button circle" @click="showUploadPopup = true">
       <img
         style="filter: invert(100%)"
@@ -113,7 +118,7 @@
       </li>
       <li v-for="file in filteredFiles" :key="file.key">
         <div
-          @click="preview(`/raw/${file.key}`)"
+          @click="preview(file)"
           @contextmenu.prevent="
             showContextMenu = true;
             focusedItem = file;
@@ -122,6 +127,7 @@
           <div class="file-item">
             <MimeIcon
               :content-type="file.httpMetadata.contentType"
+              :filename="file.key"
               :thumbnail="
                 file.customMetadata.thumbnail
                   ? `/raw/_$flaredrive$/thumbnails/${file.customMetadata.thumbnail}.png`
@@ -193,6 +199,11 @@
         </li>
       </ul>
       <ul v-else class="contextmenu-list">
+        <li v-if="isTextFile(focusedItem)">
+          <button @click="editFile(focusedItem)">
+            <span>编辑</span>
+          </button>
+        </li>
         <li>
           <button @click="renameFile(focusedItem.key)">
             <span>重命名</span>
@@ -234,12 +245,14 @@ import {
   blobDigest,
   multipartUpload,
   SIZE_LIMIT,
+  isTextFile,
 } from "/assets/main.mjs";
 import Dialog from "./Dialog.vue";
 import Menu from "./Menu.vue";
 import MimeIcon from "./MimeIcon.vue";
 import UploadPopup from "./UploadPopup.vue";
 import FolderPasswordDialog from "./FolderPasswordDialog.vue";
+import TextEditor from "./TextEditor.vue";
 
 export default {
   data: () => ({
@@ -260,6 +273,8 @@ export default {
     passwordDialogFolder: "",
     uploadProgress: null,
     uploadQueue: [],
+    showTextEditor: false,
+    editingFile: null,
   }),
 
   computed: {
@@ -318,7 +333,7 @@ export default {
       this.folders = [];
       this.foldersWithPasswordInfo = [];
       this.loading = true;
-      fetch(`/api/children/${this.cwd}`)
+      return fetch(`/api/children/${this.cwd}`)
         .then((res) => res.json())
         .then((files) => {
           this.files = files.value;
@@ -437,8 +452,27 @@ export default {
       fileElement.value = null;
     },
 
-    preview(filePath){
-      window.open(filePath);
+    preview(file) {
+      if (isTextFile(file)) {
+        this.editingFile = file;
+        this.showTextEditor = true;
+      } else {
+        window.open(`/raw/${file.key}`);
+      }
+    },
+
+    editFile(file) {
+      this.editingFile = file;
+      this.showTextEditor = true;
+      this.showContextMenu = false;
+    },
+
+    async onEditorSaved() {
+      await this.fetchFiles();
+      const updated = this.files.find(
+        (f) => f.key === this.editingFile?.key
+      );
+      if (updated) this.editingFile = updated;
     },
 
     async pasteFile() {
@@ -718,6 +752,7 @@ export default {
     MimeIcon,
     UploadPopup,
     FolderPasswordDialog,
+    TextEditor,
   },
 };
 </script>
