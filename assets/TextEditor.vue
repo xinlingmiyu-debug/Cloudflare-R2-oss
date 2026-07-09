@@ -155,7 +155,17 @@ export default {
         this.originalContent = this.content;
         this.$emit("saved");
       } catch (err) {
-        this.error = err.message || "保存失败";
+        let message = "保存失败";
+        if (err.response) {
+          const detail =
+            typeof err.response.data === "string" && err.response.data
+              ? err.response.data
+              : err.message;
+          message = `保存失败 (${err.response.status}): ${detail}`;
+        } else if (err.message) {
+          message = err.message;
+        }
+        this.error = message;
       } finally {
         this.saving = false;
       }

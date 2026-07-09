@@ -199,7 +199,7 @@
         </li>
       </ul>
       <ul v-else class="contextmenu-list">
-        <li v-if="isTextFile(focusedItem)">
+        <li v-if="isAdmin && isTextFile(focusedItem)">
           <button @click="editFile(focusedItem)">
             <span>编辑</span>
           </button>
@@ -275,6 +275,7 @@ export default {
     uploadQueue: [],
     showTextEditor: false,
     editingFile: null,
+    isAdmin: false,
   }),
 
   computed: {
@@ -327,6 +328,18 @@ export default {
           })
           .catch(() => {});
         console.log(`Create folder failed`);
+      }
+    },
+
+    async fetchAuthStatus() {
+      try {
+        const response = await fetch("/api/auth/status");
+        if (response.ok) {
+          const data = await response.json();
+          this.isAdmin = data.isAdmin;
+        }
+      } catch (e) {
+        this.isAdmin = false;
       }
     },
 
@@ -455,7 +468,7 @@ export default {
     },
 
     preview(file) {
-      if (isTextFile(file)) {
+      if (this.isAdmin && isTextFile(file)) {
         this.editingFile = file;
         this.showTextEditor = true;
       } else {
@@ -741,6 +754,7 @@ export default {
   },
 
   created() {
+    this.fetchAuthStatus();
     window.addEventListener("popstate", (ev) => {
       const searchParams = new URL(window.location).searchParams;
       if (searchParams.get("p") !== this.cwd)
