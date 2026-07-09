@@ -47,7 +47,7 @@
         </button>
         <Menu
           v-model="showMenu"
-          :items="[{ text: '名称A-Z' }, { text: '大小↑' } ,{ text: '大小↓' }, { text: '粘贴' }]"
+          :items="[{ text: '名称A-Z' }, { text: '名称Z-A' }, { text: '大小↑' } ,{ text: '大小↓' }, { text: '粘贴' }]"
           @click="onMenuClick"
         />
       </div>
@@ -345,15 +345,9 @@ export default {
         .then((res) => res.json())
         .then((files) => {
           this.files = files.value;
-          if (this.order) {
-            this.files.sort((a, b) => {
-              if (this.order === "size") {
-                return b.size - a.size;
-              }
-            });
-          }
           this.folders = files.folders;
           this.foldersWithPasswordInfo = files.foldersWithPasswordInfo || [];
+          this.applySort();
           this.loading = false;
         });
     },
@@ -431,7 +425,10 @@ export default {
     onMenuClick(text) {
       switch (text) {
         case "名称A-Z":
-          this.order = null;
+          this.order = "名称A-Z";
+          break;
+        case "名称Z-A":
+          this.order = "名称Z-A";
           break;
         case "大小↑":
           this.order = "大小↑";
@@ -442,8 +439,23 @@ export default {
         case "粘贴":
           return this.pasteFile();
       }
+      this.applySort();
+    },
+
+    applySort() {
+      const folderOrder = this.order;
+      if (folderOrder === "名称A-Z") {
+        this.folders.sort((a, b) => a.localeCompare(b));
+      } else if (folderOrder === "名称Z-A") {
+        this.folders.sort((a, b) => b.localeCompare(a));
+      }
+
       this.files.sort((a, b) => {
-        if (this.order === "大小↑") {
+        if (this.order === "名称A-Z") {
+          return a.key.localeCompare(b.key);
+        } else if (this.order === "名称Z-A") {
+          return b.key.localeCompare(a.key);
+        } else if (this.order === "大小↑") {
           return a.size - b.size;
         } else if (this.order === "大小↓") {
           return b.size - a.size;
