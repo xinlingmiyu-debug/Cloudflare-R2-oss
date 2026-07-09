@@ -298,6 +298,8 @@ export default {
   },
 
   methods: {
+    isTextFile,
+
     copyLink(link) {
       const url = new URL(link, window.location.origin);
       navigator.clipboard.writeText(url.toString());
