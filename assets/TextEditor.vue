@@ -1,6 +1,6 @@
 <template>
   <Dialog :modelValue="showDialog" @update:modelValue="onDialogClose">
-    <div v-if="file" class="text-editor">
+    <div v-if="file" class="text-editor" @click.stop>
       <div class="text-editor-header">
         <div class="text-editor-info">
           <div class="text-editor-filename" v-text="file.key.split('/').pop()"></div>
